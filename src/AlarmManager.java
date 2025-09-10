@@ -2,28 +2,24 @@ import javax.sound.sampled.*;
 import java.io.File;
 import java.io.IOException;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Scanner;
 
 public class AlarmManager {
-    ArrayList<AlarmClock> alarms;
+    private static int NoOfActiveAlarms;
+    public static ZoneId ourZone = ZoneId.of("+3");
+    private ArrayList<AlarmState> alarms ;
     private final String timeFormat = "HH:mm:ss";
 
-    private Clip validateTonePath(File filepath){
-            try(AudioInputStream audioStream = AudioSystem.getAudioInputStream(filepath)){
-                return AudioSystem.getClip();
-            } catch (UnsupportedAudioFileException e) {
-                System.out.println("Unsupported audio file. Please use .wav file and try again!");
-            }
-            catch (LineUnavailableException e) {
-                System.out.println("Audio is not available");
-            } catch (IOException e) {
-                System.out.println("Can't find audio file " + filepath);
-            }
-            return null;
+
+    AlarmManager(){
+        NoOfActiveAlarms = 0;
+        alarms = new ArrayList<>();
     }
+
     void CreateNewAlarm(){
         System.out.println("""
                            *****************
@@ -31,23 +27,20 @@ public class AlarmManager {
                            *****************
                            """);
 
-        Scanner input = new Scanner(System.in);
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern(timeFormat);
         LocalTime alarmTime = null;
         boolean validData = false;
 
         while (!validData){
-            System.out.print("""
-                               Enter time (HH:MM:SS): 
-                               """);
-            String inputTime = input.nextLine();
+            System.out.print("Enter time (HH:MM:SS): ");
+            String inputTime = InputManager.nextLine();
             try{
                 alarmTime = LocalTime.parse(inputTime, formatter);
                 System.out.print("""
                                Enter alarm tone path (path/audio.wav) (optional: press Enter to skip): 
                                """);
                 String inputTonePath = "";
-                inputTonePath = input.nextLine();
+                inputTonePath = InputManager.nextLine();
                 File audioFile;
                 if(inputTonePath.isEmpty()){
                     audioFile = new File("defaultRingtone.wav");
@@ -55,11 +48,12 @@ public class AlarmManager {
                 else{
                     audioFile = new File(inputTonePath);
                 }
-                Clip clip = validateTonePath(audioFile);
-                if(clip != null) {
-                    validData = true;
-                    alarms.add(new AlarmClock(alarmTime));
-                }
+                        NoOfActiveAlarms++;
+                        validData = true;
+                        AlarmClock alarm = new AlarmClock(alarmTime, audioFile);
+                        Thread alarmThread = new Thread(alarm);
+                        alarms.add(new AlarmState(alarm, alarmThread));
+                        alarmThread.start();
             }catch(DateTimeParseException e){
                 System.out.println("Invalid time format. Please try again!");
             }

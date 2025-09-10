@@ -1,9 +1,10 @@
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.Scanner;
 
 public class Main {
     public static void main(String[] args){
         AlarmManager alarmManager = new AlarmManager();
-        Scanner input = new Scanner(System.in);
 
         System.out.println("Hello !");
         System.out.println("""
@@ -15,7 +16,8 @@ public class Main {
 
         while(!validOption) {
             System.out.print("Enter option number: ");
-            int inputOption = input.nextInt();
+            int inputOption = InputManager.nextInt();
+
             try{
                 Options option = Options.values()[inputOption-1];
                 validOption = true;
@@ -33,7 +35,6 @@ public class Main {
 
         }
 
-        input.close();
     }
 
 }
