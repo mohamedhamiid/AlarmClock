@@ -55,7 +55,8 @@ public class AlarmManager {
                 else{
                     audioFile = new File(inputTonePath);
                 }
-                if(validateTonePath(audioFile)!= null){
+                Clip clip = validateTonePath(audioFile);
+                if(clip != null) {
                     validData = true;
                     alarms.add(new AlarmClock(alarmTime));
                 }
