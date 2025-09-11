@@ -1,60 +1,93 @@
 import javax.sound.sampled.*;
 import java.io.File;
 import java.io.IOException;
-import java.time.LocalTime;
-import java.util.Scanner;
+import java.time.*;
 
 public class AlarmClock implements Runnable {
-    private File audioFile;
+    private final int id;
+    private final Callback cb;
+    private final File audioFile;
     private Clip clip;
-    private final LocalTime alarmTime;
+    private final ZoneId zone;
+    private final ZonedDateTime target;
+    private volatile boolean stopped = false;
 
-    AlarmClock(LocalTime alarmTime, File audioFile) {
-        this.alarmTime = alarmTime;
+    AlarmClock(LocalTime alarmTime, File audioFile, ZoneId zone, Callback cb, int id) {
         this.audioFile = audioFile;
+        this.zone = zone;
+        this.cb = cb;
+        this.id = id;
 
-        System.out.println("Alarm is set for \" " +
-                            (alarmTime.getHour() - LocalTime.now(AlarmManager.ourZone).getHour()) % 24 +
-                            " hours: " +
-                            (alarmTime.getMinute() - LocalTime.now(AlarmManager.ourZone).getMinute()) % 60 +
-                            " minutes: " +
-                            (alarmTime.getSecond() - LocalTime.now(AlarmManager.ourZone).getSecond()) % 60 +
-                            " seconds \" from now"
-                            );
+        ZonedDateTime now = ZonedDateTime.now(zone);
+        ZonedDateTime candidate = now.withHour(alarmTime.getHour())
+                .withMinute(alarmTime.getMinute())
+                .withSecond(alarmTime.getSecond())
+                .withNano(0);
+        if (candidate.isBefore(now)) {
+            candidate = candidate.plusDays(1);
+        }
+        this.target = candidate;
+
+        Duration until = Duration.between(now, target);
+        long hours = until.toHours();
+        long minutes = until.minusHours(hours).toMinutes();
+        long seconds = until.minusHours(hours).minusMinutes(minutes).toSeconds();
+        System.out.println("Alarm is set for \" " + hours + " hours: " + minutes + " minutes: " + seconds
+                + " seconds \" from now");
+    }
+
+    public ZonedDateTime getTarget() {
+        return target;
     }
 
     @Override
-    public void run(){
-        while (LocalTime.now(AlarmManager.ourZone).isBefore(alarmTime)){
-            System.out.printf("\r%02d:%02d:%02d",
-                              LocalTime.now(AlarmManager.ourZone).getHour() % 24,
-                              LocalTime.now(AlarmManager.ourZone).getMinute() % 60,
-                              LocalTime.now(AlarmManager.ourZone).getSecond() % 60
-            );
-            try {
+    public void run() {
+        try {
+            while (!stopped) {
+                ZonedDateTime now = ZonedDateTime.now(zone);
+                if (!now.isBefore(target)) {
+                    break;
+                }
+                System.out.printf("\rAlarm-%d: %02d:%02d:%02d",
+                        id,now.getHour(), now.getMinute(), now.getSecond());
                 Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                System.out.println("Thread was interrupted");
             }
+        } catch (InterruptedException ie) {
+            // thread interrupted -> stop early
+            return;
         }
 
-        playSound();
-        System.out.println("\nEnter \"stop\" to stop alarm");
-        String input = "";
-        while (!input.equals("stop")){
-            input = InputManager.nextLine();
+        if (!stopped) {
+            playSound();
+            // cb.timeReached(id);
+
         }
-        System.out.println("Alarm stopped");;
     }
-    void playSound(){
-        try(AudioInputStream audioStream = AudioSystem.getAudioInputStream(audioFile)){
-            Clip clip = AudioSystem.getClip();
+
+    public void stop() {
+        stopped = true;
+        if (clip != null) {
+            try {
+                if (clip.isRunning())
+                    clip.stop();
+                if (clip.isOpen()) {
+                    clip.flush();
+                    clip.close();
+                }
+            } catch (Exception ignore) {
+            }
+        }
+    }
+
+    private void playSound() {
+        try (AudioInputStream audioStream = AudioSystem.getAudioInputStream(audioFile)) {
+            clip = AudioSystem.getClip();
             clip.open(audioStream);
+            clip.start();
             clip.loop(Clip.LOOP_CONTINUOUSLY);
         } catch (UnsupportedAudioFileException e) {
             System.out.println("Unsupported audio file. Please use .wav file and try again!");
-        }
-        catch (LineUnavailableException e) {
+        } catch (LineUnavailableException e) {
             System.out.println("Audio is not available");
         } catch (IOException e) {
             System.out.println("Can't find audio file " + audioFile);
