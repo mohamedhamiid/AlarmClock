@@ -1,21 +1,38 @@
+
 import javax.sound.sampled.*;
 import java.io.File;
 import java.io.IOException;
 import java.time.*;
 
+/**
+ * Represents a single alarm that triggers at a specific time and plays a sound.
+ * Implements Runnable so it can be run on a separate thread.
+ */
 public class AlarmClock implements Runnable {
-    private final int id;
-    private final Callback cb;
+    /** The audio file to play when the alarm triggers. */
     private final File audioFile;
+    /** The audio clip instance for playback. */
     private Clip clip;
+    /** The time zone for the alarm. */
     private final ZoneId zone;
+    /** The target date and time when the alarm should trigger. */
     private final ZonedDateTime target;
+    /** Unique identifier for this alarm. */
+    private final int id;
+    /** Flag to indicate if the alarm has been stopped. */
     private volatile boolean stopped = false;
 
-    AlarmClock(LocalTime alarmTime, File audioFile, ZoneId zone, Callback cb, int id) {
+    /**
+     * Constructs a new AlarmClock.
+     * 
+     * @param alarmTime The time of day to trigger the alarm
+     * @param audioFile The audio file to play
+     * @param zone      The time zone for the alarm
+     * @param id        Unique identifier for this alarm
+     */
+    AlarmClock(LocalTime alarmTime, File audioFile, ZoneId zone, int id) {
         this.audioFile = audioFile;
         this.zone = zone;
-        this.cb = cb;
         this.id = id;
 
         ZonedDateTime now = ZonedDateTime.now(zone);
@@ -36,10 +53,19 @@ public class AlarmClock implements Runnable {
                 + " seconds \" from now");
     }
 
+    /**
+     * Gets the target date and time when the alarm will trigger.
+     * 
+     * @return The ZonedDateTime of the alarm
+     */
     public ZonedDateTime getTarget() {
         return target;
     }
 
+    /**
+     * Main run loop for the alarm thread. Waits until the target time, then plays
+     * the sound.
+     */
     @Override
     public void run() {
         try {
@@ -48,8 +74,6 @@ public class AlarmClock implements Runnable {
                 if (!now.isBefore(target)) {
                     break;
                 }
-                System.out.printf("\rAlarm-%d: %02d:%02d:%02d",
-                        id,now.getHour(), now.getMinute(), now.getSecond());
                 Thread.sleep(1000);
             }
         } catch (InterruptedException ie) {
@@ -59,10 +83,31 @@ public class AlarmClock implements Runnable {
 
         if (!stopped) {
             playSound();
-            // cb.timeReached(id);
-
+            // Optionally notify callback if needed
         }
     }
+
+    /**
+     * Plays the alarm sound in a loop until stopped.
+     */
+    private void playSound() {
+        try (AudioInputStream audioStream = AudioSystem.getAudioInputStream(audioFile)) {
+            clip = AudioSystem.getClip();
+            clip.open(audioStream);
+            clip.start();
+            clip.loop(Clip.LOOP_CONTINUOUSLY);
+        } catch (UnsupportedAudioFileException e) {
+            System.out.println("Unsupported audio file. Please use .wav file and try again!");
+        } catch (LineUnavailableException e) {
+            System.out.println("Audio is not available");
+        } catch (IOException e) {
+            System.out.println("Can't find audio file " + audioFile);
+        }
+    }
+
+    /**
+     * Stops the alarm and releases any audio resources.
+     */
 
     public void stop() {
         stopped = true;
@@ -76,21 +121,6 @@ public class AlarmClock implements Runnable {
                 }
             } catch (Exception ignore) {
             }
-        }
-    }
-
-    private void playSound() {
-        try (AudioInputStream audioStream = AudioSystem.getAudioInputStream(audioFile)) {
-            clip = AudioSystem.getClip();
-            clip.open(audioStream);
-            clip.start();
-            clip.loop(Clip.LOOP_CONTINUOUSLY);
-        } catch (UnsupportedAudioFileException e) {
-            System.out.println("Unsupported audio file. Please use .wav file and try again!");
-        } catch (LineUnavailableException e) {
-            System.out.println("Audio is not available");
-        } catch (IOException e) {
-            System.out.println("Can't find audio file " + audioFile);
         }
     }
 }
